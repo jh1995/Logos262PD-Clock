@@ -11,7 +11,9 @@
 // **** CONFIGURATION ****
 
 // **** DEFINITIONS ****
-int inputs[6] = {5,4,3,7,8,9}; // C, B, A, C', B', A' outputs
+#define BACKSPACE 10
+
+int outputs[6] = {5,4,3,7,8,9}; // C, B, A, C', B', A' outputs
 
 int latch = 6; // latches LSD to MSD
 
@@ -31,6 +33,13 @@ Button button2(setMinutesPin, PULLUP); // Connect your button between pin 3 and 
 //bool allOff = 2; // used for PWM brightness control
 
 bool secondElapsed = 0;
+
+int keyPressDuration = 50; // how long to keep the key pressed in milliseconds
+int keyInterkeyDelay = 0; // for future use, how long to way between each keypress, for some visual effect; it sums up with keyPressDuration; in milliseconds
+
+unsigned long displayedTime = 100000;
+unsigned long displayedDate = 20160914;
+// sample values
 
 //unsigned int intensity = 0; // PWM-like intensity control
 //int intensitySteps = 10; // how many intensity levels we can do, 1 to 255
@@ -58,7 +67,7 @@ byte emuKey[16][6] ={ // LSB to MSB
 
 void setup() {
 
-  Serial.begin(9600);
+  //Serial.begin(9600);
 //  Wire.begin();
 
   //pinMode(sensorPin, INPUT_PULLUP);
@@ -66,7 +75,7 @@ void setup() {
 //  pinMode(setMinutesPin, INPUT_PULLUP);
   pinMode(oneSecondInterruptPin, INPUT_PULLUP); // DS1307 square wave output is open-drain.
     
-  for(int a = 0; a < 6; a++){pinMode(inputs[a], OUTPUT);} //set outputs
+  for(int a = 0; a < 6; a++){pinMode(outputs[a], OUTPUT);} //set outputs
   pinMode(latch, OUTPUT); //set outputs
   digitalWrite(latch, HIGH); // 
 //
@@ -107,6 +116,7 @@ void setup() {
   // start interrupt at the end of startup sequence
   attachInterrupt(digitalPinToInterrupt(oneSecondInterruptPin), oneSecondISR, FALLING);  
 
+  delay(3000);
 }
 
 int decToBcd(int val)
@@ -132,52 +142,28 @@ byte increaseBCD ( byte myBCD, int lowLimit, int highLimit ) {
   }
 }
 
+// print as many backspaces as needed
+void backspace(int howManyBackspaces) {
+  for (int i=0; i<howManyBackspaces; i++) {
+    printKey(BACKSPACE); // 10 is the position in emuKey table for the backspace character
+  }
+}
 
-// update a single digit of the display array.
-// this is supposed to be the last ring in the display chain
-// DONE, implement a form of intensity control  through PWM
-// DONE, implement a form of blinking for everything
-// DONE, implement a form of blinking for decimal point
-// ------------------
-// || parameters: digit position, BCD to display (0-F), decimal point status ||
-//void updateDisplay(int myPosition, int myBCD, int myDP) {
-//
-//  if ((myPosition == 3) && (MSDblank == 1) && (myBCD == 0)) { // blank MSD if zero
-//	myBCD = 11;
-//  }
-//  
-//  if ((myPosition >= 0) && (myPosition < 5)) { // just make sure we're not addressing a non-existant display
-//    for(int c = 0; c < 4; c++){
-//      if ((( digitBlink == 1 ) && ( blinker == 1 )) || ( allOff == 1) ) {
-//        digitalWrite(inputs[c], BCD[11][c]);
-//      } else {
-//        digitalWrite(inputs[c], BCD[myBCD][c]);
-//      }
-//    }
-//
-//    if ((( dpBlink == 1 ) && (blinker == 1)) || ( allOff == 1) ) {
-//      digitalWrite(decimalPoint, HIGH);
-//    } else {
-//      digitalWrite(decimalPoint, myDP);
-//    }
-//    
-//    digitalWrite(latches[myPosition], LOW);
-//    digitalWrite(latches[myPosition], HIGH); 
-//  }
-//}
-//
+void printKey(int myBCD) {
 
-void printBCD(int myPosition, int myBCD, int myDPh, int myDPl) {
-  int myDigit;
- 
-  // get lower digit and display it
-  myDigit = myBCD & 0x0F;
-//  updateDisplay(myPosition, myDigit, myDPl);
+  // choose right MUX line
+  digitalWrite(outputs[0], emuKey[myBCD][0]);
+  digitalWrite(outputs[1], emuKey[myBCD][1]);
+  digitalWrite(outputs[2], emuKey[myBCD][2]);
+  digitalWrite(outputs[3], emuKey[myBCD][3]);
+  digitalWrite(outputs[4], emuKey[myBCD][4]);
+  digitalWrite(outputs[5], emuKey[myBCD][5]);
 
-  // get higher digit and display it; remember to move 1 position upwards
-  myDigit = myBCD >> 4;
-//  updateDisplay(myPosition+1, myDigit, myDPh);
-
+  // "press" the key
+  digitalWrite(latch, LOW); // connect together row and column
+  delay(keyPressDuration);
+  digitalWrite(latch, HIGH); // 
+  delay(keyPressDuration);
 }
 
 
@@ -193,12 +179,6 @@ void loop() {
 
   int digit;
   int j;
-  int lowDigit;
-  int highDigit;
-  static int mainDP0;
-  static int mainDP1;
-  static int mainDP2;
-  static int mainDP3;
   static byte seconds;
   static byte minutes;
   static byte hours;
@@ -215,76 +195,35 @@ void loop() {
   static byte control;
   static byte inSetMode; // are we setting the time? any value > 0 defines what we are setting
 
-  delay(1000);
-
-      digitalWrite(inputs[0], 0);
-      digitalWrite(inputs[1], 1);
-      digitalWrite(inputs[2], 1);
-      digitalWrite(inputs[3], 0);
-      digitalWrite(inputs[4], 0);
-      digitalWrite(inputs[5], 1);
-
-  digitalWrite(latch, LOW); // connect together row and column
-  delay(100);
-  digitalWrite(latch, HIGH); // 
-
-      digitalWrite(inputs[0], 1);
-      digitalWrite(inputs[1], 0);
-      digitalWrite(inputs[2], 0);
-      digitalWrite(inputs[3], 0);
-      digitalWrite(inputs[4], 0);
-      digitalWrite(inputs[5], 1);
-
-  digitalWrite(latch, LOW); // connect together row and column
-  delay(100);
-  digitalWrite(latch, HIGH); // 
-
-      digitalWrite(inputs[0], 0);
-      digitalWrite(inputs[1], 1);
-      digitalWrite(inputs[2], 1);
-      digitalWrite(inputs[3], 0);
-      digitalWrite(inputs[4], 1);
-      digitalWrite(inputs[5], 0);
-
-  digitalWrite(latch, LOW); // connect together row and column
-  delay(100);
-  digitalWrite(latch, HIGH); // 
-
-      digitalWrite(inputs[0], 1);
-      digitalWrite(inputs[1], 0);
-      digitalWrite(inputs[2], 1);
-      digitalWrite(inputs[3], 0);
-      digitalWrite(inputs[4], 0);
-      digitalWrite(inputs[5], 0);
-
-  digitalWrite(latch, LOW); // connect together row and column
-  delay(100);
-  digitalWrite(latch, HIGH); // 
 
 
+ 
   delay(1000);
   delay(1000);
   delay(1000);
+  printKey(2);
+  printKey(0);
+  printKey(1);
+  printKey(6);
+  printKey(0);
+  printKey(9);
+  printKey(1);
+  printKey(4);
   delay(1000);
   delay(1000);
   delay(1000);
+  backspace(8);
   delay(1000);
-  delay(1000);
+  for (int j=0;j<10;j++) {
+    printKey(j);
+    delay(300);
+    backspace(1);
+    delay(10);
+  }
   delay(1000);
   delay(1000);
   delay(1000);
 
-      // backspace
-      digitalWrite(inputs[0], 0);
-      digitalWrite(inputs[1], 0);
-      digitalWrite(inputs[2], 1);
-      digitalWrite(inputs[3], 0);
-      digitalWrite(inputs[4], 0);
-      digitalWrite(inputs[5], 1);
-
-  digitalWrite(latch, LOW); // connect together row and column
-  delay(100);
-  digitalWrite(latch, HIGH); // 
 
 //
 //  // things to do every second.
@@ -488,34 +427,6 @@ void loop() {
 //      lowDigit = minutes;
 //      highDigit = hours;
 //  
-//      // make a rolling decimal point, for some action
-//      switch (new_year_nr) {
-//        case 0:
-//          mainDP0 = 1;  // decimal points
-//          mainDP1 = 1;  // 0 is ON
-//          mainDP2 = 1;  // 1 is OFF
-//          mainDP3 = 0;
-//          break;
-//        case 1:
-//          mainDP0 = 1;  // decimal points
-//          mainDP1 = 1;  // 0 is ON
-//          mainDP2 = 0;  // 1 is OFF
-//          mainDP3 = 1;
-//          break;
-//        case 2:
-//          mainDP0 = 1;  // decimal points
-//          mainDP1 = 0;  // 0 is ON
-//          mainDP2 = 1;  // 1 is OFF
-//          mainDP3 = 1;
-//          break;
-//        case 3:
-//          mainDP0 = 0;  // decimal points
-//          mainDP1 = 1;  // 0 is ON
-//          mainDP2 = 1;  // 1 is OFF
-//          mainDP3 = 1;
-//          break;
-//        } // end switch
-//      //}
 //  
 //      // enter SET mode
 //      if (button1.isPressed()) {
@@ -536,15 +447,6 @@ void loop() {
 //      
 //    } // end if/else inSetMode
 //
-//    
-//
-//  
-//    
-//    intensity = intensity + 1;  // display intensity help variable. 
-//    allOff = intensity % intensitySteps; 
-//    
-//    printBCD(0, lowDigit, mainDP1, mainDP0);
-//    printBCD(2, highDigit, mainDP3, mainDP2);
 
 } 
 
