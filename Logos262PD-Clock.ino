@@ -12,6 +12,7 @@
 
 // **** DEFINITIONS ****
 #define BACKSPACE 10
+#define DECPOINT 12
 
 int outputs[6] = {5,4,3,7,8,9}; // C, B, A, C', B', A' outputs
 
@@ -36,6 +37,7 @@ bool secondElapsed = 0;
 
 int keyPressDuration = 50; // how long to keep the key pressed in milliseconds
 int keyInterkeyDelay = 0; // for future use, how long to way between each keypress, for some visual effect; it sums up with keyPressDuration; in milliseconds
+int interBlockPause = 300; // visual effect of pausing when typing informational blocks
 
 unsigned long displayedTime = 100000;
 unsigned long displayedDate = 20160914;
@@ -105,18 +107,12 @@ void setup() {
 //    Wire.endTransmission();
 //  }
 
-  // hello world, show I'm OK
-//  printBCD(0,0x12,1,1);
-//  printBCD(2,0x34,1,1);
-//  delay(1000);
-//  printBCD(0,0x56,1,1);
-//  printBCD(2,0x79,1,1);
-//  delay(1000);
+
 
   // start interrupt at the end of startup sequence
   attachInterrupt(digitalPinToInterrupt(oneSecondInterruptPin), oneSecondISR, FALLING);  
 
-  delay(3000);
+  delay(6000);
 }
 
 int decToBcd(int val)
@@ -163,13 +159,26 @@ void printKey(int myBCD) {
   digitalWrite(latch, LOW); // connect together row and column
   delay(keyPressDuration);
   digitalWrite(latch, HIGH); // 
-  delay(keyPressDuration);
+  delay(keyPressDuration); // this delay is needed as a guard time before next keypress
 }
 
 
-void printInt(int myPosition, int myBCD, int myDPh, int myDPl) {
-  // unpack an integer into BCD and call printing functions
+// BCD is a two digit number in BCD format
+void printBCD(int myBCD) {
+  int myDigitHigh;
+  int myDigitLow;
+ 
+  // get lower digit
+  myDigitLow = myBCD & 0x0F;
+
+  // get higher digit
+  myDigitHigh = myBCD >> 4;
+  
+  printKey(myDigitHigh); // print higher digit
+  printKey(myDigitLow); // print lower digit
+
 }
+
 
 void oneSecondISR() {
   secondElapsed = 1;
@@ -180,7 +189,7 @@ void loop() {
   int digit;
   int j;
   static byte seconds;
-  static byte minutes;
+  static byte minutes = 0x00;
   static byte hours;
   static byte giorno_sett;
   static byte month_day;
@@ -196,35 +205,44 @@ void loop() {
   static byte inSetMode; // are we setting the time? any value > 0 defines what we are setting
 
 
-
+  year_nr = 0x16;
+  month_nr = 0x09;
+  month_day = 0x14;
+  hours = 0x23;
+  //minutes = 0x00;
  
+  printBCD(0x20); // year, we're good until 2099 :)
+  printBCD(year_nr);
+  delay(interBlockPause);
+  printBCD(month_nr);
+  delay(interBlockPause);
+  printBCD(month_day);
+  delay(interBlockPause);
+  printKey(DECPOINT);
+  delay(interBlockPause);
+  printBCD(hours);
+  delay(interBlockPause);
+  printBCD(minutes);
+  delay(interBlockPause);
+  
+  
   delay(1000);
-  delay(1000);
-  delay(1000);
-  printKey(2);
-  printKey(0);
-  printKey(1);
-  printKey(6);
-  printKey(0);
-  printKey(9);
-  printKey(1);
-  printKey(4);
-  delay(1000);
-  delay(1000);
-  delay(1000);
-  backspace(8);
-  delay(1000);
-  for (int j=0;j<10;j++) {
-    printKey(j);
-    delay(300);
-    backspace(1);
-    delay(10);
-  }
-  delay(1000);
-  delay(1000);
-  delay(1000);
+  delay(2000);
 
 
+  minutes = increaseBCD(minutes,0, 59);
+  
+  backspace(2);
+
+  printBCD(minutes);
+  delay(interBlockPause);
+
+  delay(1000);
+  delay(2000);
+
+  minutes = increaseBCD(minutes,0, 59);
+  backspace(13); // eat it all up, the decimal point counts as well!
+  
 //
 //  // things to do every second.
 //  if (secondElapsed == 1) {
