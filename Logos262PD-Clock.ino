@@ -20,10 +20,11 @@ int latch = 6; // latches LSD to MSD
 
 //int oneSecondInterruptPin = 2; // pin for timekeeping, D2
 #define oneSecondInterruptPin 2
+#define bypassPin A0 // logical level 1, do clock; logical level 0, do calculator
 
 
-#define setHoursPin A0 // pull to ground to set hours
-#define setMinutesPin A1 // pull to ground to set minutes
+#define setHoursPin A1 // pull to ground to set hours
+#define setMinutesPin A2 // pull to ground to set minutes
 
 Button button1(setHoursPin, PULLUP); // Connect your button between pin 2 and GND
 Button button2(setMinutesPin, PULLUP); // Connect your button between pin 3 and GND
@@ -59,13 +60,14 @@ byte emuKey[16][6] ={ // LSB to MSB
 
 void setup() {
 
-  Serial.begin(9600);
+//  Serial.begin(9600);
   Wire.begin();
 
   //pinMode(sensorPin, INPUT_PULLUP);
 //  pinMode(setHoursPin, INPUT_PULLUP);
 //  pinMode(setMinutesPin, INPUT_PULLUP);
   pinMode(oneSecondInterruptPin, INPUT); // DS3231 module should already include pullups
+  pinMode(bypassPin, INPUT_PULLUP); // clock function bypass pin
     
   for(int a = 0; a < 6; a++){pinMode(outputs[a], OUTPUT);} //set outputs
   pinMode(latch, OUTPUT); //set outputs
@@ -195,10 +197,10 @@ void loop() {
   static byte control;
   static byte inSetMode; // are we setting the time? any value > 0 defines what we are setting
 
-
+  if ( digitalRead(bypassPin) == 1 ) { // no magnet on the bypass switch/sensor, pull up resistor kicks in, do the clock stuff
  
   // every once in a while ...
-  if (secondElapsed > 10) {
+  if (secondElapsed > 20) {
 
       secondElapsed = 0; // reset the ISR
 
@@ -221,17 +223,17 @@ void loop() {
       year_nr = Wire.read();
       //control = Wire.read();
 
-    Serial.print(month_day, HEX);
-    Serial.print("/");
-    Serial.print(month_nr, HEX);
-    Serial.print("/");
-    Serial.print(year_nr, HEX);
-        Serial.print(" ");
-    Serial.print(hours, HEX);
-        Serial.print(":");
-    Serial.print(minutes, HEX);
-        Serial.print(":");
-    Serial.println(seconds, HEX);
+//    Serial.print(month_day, HEX);
+//    Serial.print("/");
+//    Serial.print(month_nr, HEX);
+//    Serial.print("/");
+//    Serial.print(year_nr, HEX);
+//        Serial.print(" ");
+//    Serial.print(hours, HEX);
+//        Serial.print(":");
+//    Serial.print(minutes, HEX);
+//        Serial.print(":");
+//    Serial.println(seconds, HEX);
 
 
       backspace(13); // eat it all up, the decimal point counts as well!
@@ -251,7 +253,10 @@ void loop() {
       delay(interBlockPause);
 //      
 //      
-  }
+    } // end if secondelapsed
+
+  } // end if control the bypass pin
 
 } 
+
 
