@@ -255,6 +255,13 @@ void loop() {
               break;
               
             case 3:
+              printBCD(year_nr);
+              printBCD(month_nr);
+              printBCD(month_day);
+              printKey(DECPOINT);
+              printBCD(hours);
+              printBCD(minutes);
+              printBCD(seconds);              
               printKey(SUM);
               printKey(0);
               printKey(DECPOINT);
@@ -268,12 +275,22 @@ void loop() {
               break;
                 
             case 4:
+              printBCD(hours);
+              printBCD(minutes);
+              printBCD(seconds);              
               printKey(SUM);
               printKey(1);
               printKey(SUM);
               break;
               
             case 5:
+              printBCD(hours);
+              printBCD(minutes);
+              printBCD(seconds);              
+              printKey(DECPOINT);
+              printBCD(month_day);
+              printBCD(month_nr);
+              printBCD(year_nr);
               printKey(SUM);
               printKey(1);
               printKey(SUM);
@@ -354,6 +371,8 @@ void loop() {
 
       secondElapsed = seconds; // reinit interrupt variable
 
+      mode = bcdToDec(minutes) % 6;
+
 //    Serial.print(month_day, HEX);
 //    Serial.print("/");
 //    Serial.print(month_nr, HEX);
@@ -368,22 +387,6 @@ void loop() {
 
 
     } // end if minute has elapsed
-
-    // if one second has passed
-//    if ( secondElapsed > oldSecondElapsed ) {
-//      if ( firstPass == 1 ) {
-//        printKey(SUM);
-//        printKey(1);
-//        printKey(SUM);
-//        firstPass = 0;
-//      } else {
-//        printKey(SUM);
-//      }
-//      oldSecondElapsed = secondElapsed;
-//    }
-
-
-
 
   } // end if control the bypass pin
 
