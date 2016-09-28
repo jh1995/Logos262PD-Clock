@@ -13,6 +13,9 @@
 // **** DEFINITIONS ****
 #define BACKSPACE 10
 #define DECPOINT 12
+#define SUM 11
+#define CECA 13
+#define TOTI 14
 
 int outputs[6] = {5,4,3,7,8,9}; // C, B, A, C', B', A' outputs
 
@@ -30,13 +33,17 @@ Button button1(setHoursPin, PULLUP); // Connect your button between pin 2 and GN
 Button button2(setMinutesPin, PULLUP); // Connect your button between pin 3 and GND
 
 int secondElapsed = 0;
+int oldSecondElapsed = 0;
+
+int mode = 0;
 
 int keyPressDuration = 50; // how long to keep the key pressed in milliseconds
 int keyInterkeyDelay = 0; // for future use, how long to way between each keypress, for some visual effect; it sums up with keyPressDuration; in milliseconds
 int interBlockPause = 300; // visual effect of pausing when typing informational blocks
 
-unsigned long displayedTime = 100000;
-unsigned long displayedDate = 20160914;
+//unsigned long currentTime;
+//unsigned long displayedTime = 100000;
+//unsigned long displayedDate = 20160914;
 
 byte emuKey[16][6] ={ // LSB to MSB
 {1,0,0,0,0,1}, // 0
@@ -53,7 +60,7 @@ byte emuKey[16][6] ={ // LSB to MSB
 {0,0,0,0,1,1}, // 11 sum
 {1,0,0,0,1,0}, // 12 decimal point
 {1,1,1,1,0,0}, // 13 CE/CA
-{0,0,0,0,1,1}, // 14 substract
+{0,0,0,0,1,0}, // 14 Totalizer 1
 {0,1,1,0,1,1}  // 15 multiply
 }; 
 
@@ -100,9 +107,10 @@ void setup() {
 //  }
 
 
-  delay(6000);
+  delay(3000);
 
   // start interrupt at the end of startup sequence
+  oldSecondElapsed = secondElapsed = 58;
   attachInterrupt(digitalPinToInterrupt(oneSecondInterruptPin), oneSecondISR, FALLING);  
 
 }
@@ -173,14 +181,15 @@ void printBCD(int myBCD) {
 
 
 void oneSecondISR() {
+  oldSecondElapsed = secondElapsed;
   secondElapsed = secondElapsed + 1;
-  Serial.println(secondElapsed);
-}
+  }
 
 void loop() {
 
   int digit;
   int j;
+  static boolean firstPass = 1;
   static byte seconds;
   static byte minutes = 0x00;
   static byte hours;
@@ -199,9 +208,127 @@ void loop() {
 
   if ( digitalRead(bypassPin) == 1 ) { // no magnet on the bypass switch/sensor, pull up resistor kicks in, do the clock stuff
  
-  // every once in a while ...
-  if (secondElapsed > 20) {
+  // for 59 seconds show the time
+  if (secondElapsed < 59) {
+    if ( secondElapsed > oldSecondElapsed ) { // has one second passed?
+        oldSecondElapsed = secondElapsed;
+        if (firstPass == 1) {
+          switch (mode) {
+            case 0:
+              // display yyyymmdd.hhmm
+              printBCD(0x20); // year, we're good until 2099 :)
+              printBCD(year_nr);
+              delay(interBlockPause);
+              printBCD(month_nr);
+              delay(interBlockPause);
+              printBCD(month_day);
+              delay(interBlockPause);
+              printKey(DECPOINT);
+              delay(interBlockPause);
+              printBCD(hours);
+              delay(interBlockPause);
+              printBCD(minutes);
+              delay(interBlockPause);
+              break;
+    
+            case 1:
+              printBCD(hours);
+              delay(interBlockPause);
+              printBCD(minutes);
+              delay(interBlockPause);
+              printKey(DECPOINT);
+              delay(interBlockPause);
+              printBCD(month_day);
+              delay(interBlockPause);
+              printBCD(month_nr);
+              delay(interBlockPause);
+              printBCD(0x20); // year, we're good until 2099 :)
+              printBCD(year_nr);
+              break;
+              
+            case 2:
+              printBCD(hours);
+              delay(interBlockPause);
+              printKey(DECPOINT);
+              delay(interBlockPause);
+              printBCD(minutes);
+              break;
+              
+            case 3:
+              printKey(SUM);
+              printKey(0);
+              printKey(DECPOINT);
+              printKey(0);
+              printKey(0);
+              printKey(0);
+              printKey(0);
+              printKey(0);                                                  
+              printKey(1);
+              printKey(SUM);
+              break;
+                
+            case 4:
+              printKey(SUM);
+              printKey(1);
+              printKey(SUM);
+              break;
+              
+            case 5:
+              printKey(SUM);
+              printKey(1);
+              printKey(SUM);
+              break;
+    
+          }
+    
+    
+          firstPass = 0;
+        } else {
+          switch (mode) {
+            case 0: break; // nothing to do
+            case 1: break; // nothing to do
+            case 2: break; // nothing to do
+            case 3:
+              printKey(SUM);
+              break;
+              
+            case 4:
+              printKey(SUM);
+              break;
+              
+            case 5:
+              printKey(SUM);
+              break;
+            
+          }
+        }
+    } // end if one second has passed
+  } // end if seconds < 59
 
+  // clear the screen
+  if (secondElapsed == 59) {
+    switch (mode) {
+      case 0:
+        backspace(13);
+        break;
+      case 1:
+        backspace(13);
+        break;
+      case 2:
+        backspace(5);
+        break;
+      default:
+        printKey(TOTI);
+        printKey(TOTI);
+        break;
+    } // end switch
+  } // end if seconds == 58
+
+  // prepare for the next round
+  if (secondElapsed > 59) {
+
+      delay(1000);
+      
       secondElapsed = 0; // reset the ISR
 
       //richiedo 7 byte dal dispositivo con
@@ -223,6 +350,10 @@ void loop() {
       year_nr = Wire.read();
       //control = Wire.read();
 
+      firstPass = 1;
+
+      secondElapsed = seconds; // reinit interrupt variable
+
 //    Serial.print(month_day, HEX);
 //    Serial.print("/");
 //    Serial.print(month_nr, HEX);
@@ -236,24 +367,23 @@ void loop() {
 //    Serial.println(seconds, HEX);
 
 
-      backspace(13); // eat it all up, the decimal point counts as well!
+    } // end if minute has elapsed
 
-      printBCD(0x20); // year, we're good until 2099 :)
-      printBCD(year_nr);
-      delay(interBlockPause);
-      printBCD(month_nr);
-      delay(interBlockPause);
-      printBCD(month_day);
-      delay(interBlockPause);
-      printKey(DECPOINT);
-      delay(interBlockPause);
-      printBCD(hours);
-      delay(interBlockPause);
-      printBCD(minutes);
-      delay(interBlockPause);
-//      
-//      
-    } // end if secondelapsed
+    // if one second has passed
+//    if ( secondElapsed > oldSecondElapsed ) {
+//      if ( firstPass == 1 ) {
+//        printKey(SUM);
+//        printKey(1);
+//        printKey(SUM);
+//        firstPass = 0;
+//      } else {
+//        printKey(SUM);
+//      }
+//      oldSecondElapsed = secondElapsed;
+//    }
+
+
+
 
   } // end if control the bypass pin
 
