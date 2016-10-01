@@ -6,6 +6,7 @@
 
 #include <Wire.h>
 #include <Button.h>
+#include <EEPROM.h> // used to store DST status
 
 
 // **** CONFIGURATION ****
@@ -16,6 +17,8 @@
 #define SUM 11
 #define CECA 13
 #define TOTI 14
+
+#define DSTADDRESS 1 // EEPROM position for DST status
 
 int outputs[6] = {5,4,3,7,8,9}; // C, B, A, C', B', A' outputs
 
@@ -34,6 +37,14 @@ Button button2(setMinutesPin, PULLUP); // Connect your button between pin 3 and 
 
 int secondElapsed = 0;
 int oldSecondElapsed = 0;
+
+byte seconds;
+byte minutes = 0x00;
+byte hours;
+byte weekday;
+byte month_day;
+byte month_nr;
+byte year_nr;
 
 int mode = 0;
 
@@ -67,6 +78,9 @@ byte emuKey[16][6] ={ // LSB to MSB
 
 void setup() {
 
+  int oldDST;
+  int curDST;
+  
 //  Serial.begin(9600);
   Wire.begin();
 
@@ -106,6 +120,15 @@ void setup() {
     Wire.endTransmission();  // 
 //  }
 
+  readRTC();
+  oldDST = EEPROM.read(DSTADDRESS);
+  curDST = IsDst(month_day, month_nr, weekday);
+  // if ( curDST <> oldDST ) {
+  //    if ( curDST == 0 ) { // we're in solar time, move backwards 1h
+  //    } else { // we're in DST, move forward 1h
+  //    }
+  // }
+  EEPROM.update(DSTADDRESS, curDST);
 
   delay(3000);
 
@@ -113,6 +136,22 @@ void setup() {
   oldSecondElapsed = secondElapsed = 58;
   attachInterrupt(digitalPinToInterrupt(oneSecondInterruptPin), oneSecondISR, FALLING);  
 
+}
+
+
+// check if we are in DST timeframe
+// Returns 0 in solar time, returns 1 in DST
+int IsDst(int day, int month, int dow)
+{
+    if (month < 3 || month > 10)  return 0; 
+    if (month > 3 && month < 10)  return 1; 
+
+    int previousSunday = day - dow;
+
+    if ((month == 3) && (previousSunday >= 25)) return 1;
+    if ((month == 10) && (previousSunday < 25)) return 1;
+
+    return 0; 
 }
 
 int decToBcd(int val)
@@ -179,6 +218,27 @@ void printBCD(int myBCD) {
 
 }
 
+void readRTC() {
+        //richiedo 7 byte dal dispositivo con
+      //indirizzo 0x68
+      Wire.beginTransmission(0x68);   // Initialize the Tx buffer
+      Wire.write(0x00);            // Put slave register address in Tx buffer
+      Wire.endTransmission(false);       // Send the Tx buffer, but send a restart to keep connection alive
+
+      //  Wire.requestFrom(0x68, 7, 1); // just date and time
+      Wire.requestFrom(0x68, 7); // time, date and control byte
+      //recupero i 7 byte relativi ai
+      //corrispondenti registri
+      seconds = Wire.read();
+      minutes = Wire.read();
+      hours = Wire.read();
+      weekday = Wire.read();
+      month_day = Wire.read();
+      month_nr = Wire.read();
+      year_nr = Wire.read();
+      //control = Wire.read();
+
+}
 
 void oneSecondISR() {
   oldSecondElapsed = secondElapsed;
@@ -190,18 +250,12 @@ void loop() {
   int digit;
   int j;
   static boolean firstPass = 1;
-  static byte seconds;
-  static byte minutes = 0x00;
-  static byte hours;
-  static byte giorno_sett;
-  static byte month_day;
-  static byte month_nr;
-  static byte year_nr;
-  static byte new_minutes;
-  static byte new_hours;
-  static byte new_month_day;
-  static byte new_month_nr;
-  static byte new_year_nr;
+
+//  static byte new_minutes;
+//  static byte new_hours;
+//  static byte new_month_day;
+//  static byte new_month_nr;
+//  static byte new_year_nr;
 
   static byte control;
   static byte inSetMode; // are we setting the time? any value > 0 defines what we are setting
@@ -230,7 +284,8 @@ void loop() {
               printBCD(minutes);
               delay(interBlockPause);
               break;
-    
+
+            // display hhmm.ddmm20yy
             case 1:
               printBCD(hours);
               delay(interBlockPause);
@@ -245,7 +300,8 @@ void loop() {
               printBCD(0x20); // year, we're good until 2099 :)
               printBCD(year_nr);
               break;
-              
+
+            // display hhmm
             case 2:
               printBCD(hours);
               delay(interBlockPause);
@@ -253,27 +309,25 @@ void loop() {
               delay(interBlockPause);
               printBCD(minutes);
               break;
-              
+
+            // display ddmm20yy.hhmm
             case 3:
-              printBCD(year_nr);
-              printBCD(month_nr);
               printBCD(month_day);
+              delay(interBlockPause);
+              printBCD(month_nr);
+              delay(interBlockPause);
+              printBCD(0x20); // year, we're good until 2099 :)
+              printBCD(year_nr);              
+              delay(interBlockPause);
               printKey(DECPOINT);
+              delay(interBlockPause);
               printBCD(hours);
+              delay(interBlockPause);
               printBCD(minutes);
-              printBCD(seconds);              
-              printKey(SUM);
-              printKey(0);
-              printKey(DECPOINT);
-              printKey(0);
-              printKey(0);
-              printKey(0);
-              printKey(0);
-              printKey(0);                                                  
-              printKey(1);
-              printKey(SUM);
+              delay(interBlockPause);
               break;
-                
+
+            // display hhmmss ++
             case 4:
               printBCD(hours);
               printBCD(minutes);
@@ -282,7 +336,8 @@ void loop() {
               printKey(1);
               printKey(SUM);
               break;
-              
+
+            // display hhmmss.ddmmyy ++
             case 5:
               printBCD(hours);
               printBCD(minutes);
@@ -305,9 +360,7 @@ void loop() {
             case 0: break; // nothing to do
             case 1: break; // nothing to do
             case 2: break; // nothing to do
-            case 3:
-              printKey(SUM);
-              break;
+            case 3: break; // nothing do to
               
             case 4:
               printKey(SUM);
@@ -334,6 +387,9 @@ void loop() {
       case 2:
         backspace(5);
         break;
+      case 3:
+        backspace(13);
+        break;
       default:
         printKey(TOTI);
         printKey(TOTI);
@@ -348,30 +404,14 @@ void loop() {
       
       secondElapsed = 0; // reset the ISR
 
-      //richiedo 7 byte dal dispositivo con
-      //indirizzo 0x68
-      Wire.beginTransmission(0x68);   // Initialize the Tx buffer
-      Wire.write(0x00);            // Put slave register address in Tx buffer
-      Wire.endTransmission(false);       // Send the Tx buffer, but send a restart to keep connection alive
-
-      //  Wire.requestFrom(0x68, 7, 1); // just date and time
-      Wire.requestFrom(0x68, 7); // time, date and control byte
-      //recupero i 7 byte relativi ai
-      //corrispondenti registri
-      seconds = Wire.read();
-      minutes = Wire.read();
-      hours = Wire.read();
-      giorno_sett = Wire.read();
-      month_day = Wire.read();
-      month_nr = Wire.read();
-      year_nr = Wire.read();
-      //control = Wire.read();
-
+      readRTC();
+      
       firstPass = 1;
 
       secondElapsed = seconds; // reinit interrupt variable
 
       mode = bcdToDec(minutes) % 6;
+      if (hours < 1) { mode = 0; }
 
 //    Serial.print(month_day, HEX);
 //    Serial.print("/");
